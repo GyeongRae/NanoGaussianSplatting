@@ -16,6 +16,14 @@
 #include "SceneView.h"
 #include "ScreenPass.h"
 
+// Shadow Receiver (Tier 1.1 step 3): we need to peek into the renderer's
+// scene to locate the dominant DirectionalLight and its CSM shadow info.
+// These headers sit in Runtime/Renderer/Private, already on NanoGS's
+// PrivateIncludePaths (see GaussianSplatting.Build.cs).
+#include "ScenePrivate.h"
+#include "LightSceneInfo.h"
+#include "ShadowRendering.h"
+
 #define LOCTEXT_NAMESPACE "FNanoGSModule"
 
 // Pass 2 parameter struct: declares IntermediateTexture as an RDG-tracked shader resource
@@ -117,6 +125,43 @@ void FNanoGSModule::OnPostEngineInit()
 	}
 }
 
+// Shadow Receiver (Tier 1.1 step 3): probe the render-thread scene for the
+// dominant directional light and its CSM. Returns the FLightSceneInfo
+// pointer (nullptr if no suitable light exists) so later steps can pull
+// shadow depth + WorldToShadow matrices from its FVisibleLightInfo.
+// Current scope: find + log. No PS plumbing yet.
+static const FLightSceneInfo* FindDominantDirectionalLightForShadows(const FSceneView& View)
+{
+	const FScene* Scene = static_cast<const FScene*>(View.Family->Scene);
+	if (!Scene)
+	{
+		return nullptr;
+	}
+
+	// Iterate lights that are currently registered with the scene.
+	// FScene::Lights uses a custom-aligned allocator (FLightSceneInfoCompactSparseArray)
+	// in 5.7, so we rely on auto/range-for to pick up the correct iterator type.
+	for (auto It = Scene->Lights.CreateConstIterator(); It; ++It)
+	{
+		const FLightSceneInfoCompact& LightCompact = *It;
+		if (LightCompact.LightType != LightType_Directional)
+		{
+			continue;
+		}
+		const FLightSceneInfo* LightSceneInfo = LightCompact.LightSceneInfo;
+		if (!LightSceneInfo || !LightSceneInfo->Proxy)
+		{
+			continue;
+		}
+		if (!LightSceneInfo->Proxy->CastsDynamicShadow())
+		{
+			continue;
+		}
+		return LightSceneInfo;
+	}
+	return nullptr;
+}
+
 void FNanoGSModule::OnPostOpaqueRender_RenderThread(FPostOpaqueRenderParameters& Parameters)
 {
 	FGaussianSplatViewExtension* Ext = FGaussianSplatViewExtension::Get();
@@ -127,6 +172,43 @@ void FNanoGSModule::OnPostOpaqueRender_RenderThread(FPostOpaqueRenderParameters&
 
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 	const FSceneView* SceneView = reinterpret_cast<const FSceneView*>(Parameters.View);
+
+	// Shadow Receiver (Tier 1.1 step 3): throttled discovery log.
+	// If any registered proxy has opted in to shadow receiving, try to find the
+	// scene's dominant directional light and print its name once per state change.
+	// Real CSM extraction lands in the next commit; this verifies our scene-query
+	// path compiles and resolves a light at runtime.
+	{
+		static const FLightSceneInfo* LastLoggedLight = reinterpret_cast<const FLightSceneInfo*>(uintptr_t(-1));
+		TArray<FGaussianSplatSceneProxy*> ProbeProxies;
+		Ext->GetRegisteredProxies(ProbeProxies);
+		bool bAnyWantsShadows = false;
+		for (const FGaussianSplatSceneProxy* P : ProbeProxies)
+		{
+			if (P && P->GetReceiveShadows())
+			{
+				bAnyWantsShadows = true;
+				break;
+			}
+		}
+		if (bAnyWantsShadows)
+		{
+			const FLightSceneInfo* FoundLight = FindDominantDirectionalLightForShadows(*SceneView);
+			if (FoundLight != LastLoggedLight)
+			{
+				if (FoundLight && FoundLight->Proxy)
+				{
+					UE_LOG(LogTemp, Log, TEXT("NanoGS Shadow Receiver: found dominant DirectionalLight '%s'"),
+						*FoundLight->Proxy->GetOwnerNameOrLabel());
+				}
+				else
+				{
+					UE_LOG(LogTemp, Log, TEXT("NanoGS Shadow Receiver: no suitable DirectionalLight with dynamic shadows in this scene"));
+				}
+				LastLoggedLight = FoundLight;
+			}
+		}
+	}
 
 	TArray<FGaussianSplatSceneProxy*> Proxies;
 	Ext->GetRegisteredProxies(Proxies);
