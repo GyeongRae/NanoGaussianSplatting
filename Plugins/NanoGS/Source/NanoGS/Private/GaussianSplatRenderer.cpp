@@ -1169,7 +1169,8 @@ void FGaussianSplatRenderer::DrawSplatsGlobal(
 	FGaussianGlobalAccumulator* GlobalAccumulator,
 	FBufferRHIRef IndexBuffer,
 	int32 TotalSplatCount,
-	int32 DebugMode)
+	int32 DebugMode,
+	const FShadowParams& ShadowParams)
 {
 	SCOPED_DRAW_EVENT(RHICmdList, GaussianSplatDrawGlobal);
 
@@ -1236,6 +1237,10 @@ void FGaussianSplatRenderer::DrawSplatsGlobal(
 
 	FGaussianSplatPS::FParameters PSParameters;
 	SetVelocityPSParameters(PSParameters, View, GlobalAccumulator);
+	// Shadow Receiver (Tier 1.1): forward the batch-wide shadow state to the PS.
+	PSParameters.bReceiveShadows = ShadowParams.bReceiveShadows ? 1u : 0u;
+	PSParameters.ShadowStrength = ShadowParams.ShadowStrength;
+	PSParameters.DebugForceShadowFactor = ShadowParams.DebugForceShadowFactor;
 	SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PSParameters);
 
 	RHICmdList.SetStreamSource(0, nullptr, 0);
@@ -1603,7 +1608,8 @@ void FGaussianSplatRenderer::DrawSplatsGlobalIndirect(
 	const FSceneView& View,
 	FGaussianGlobalAccumulator* GlobalAccumulator,
 	FBufferRHIRef IndexBuffer,
-	int32 DebugMode)
+	int32 DebugMode,
+	const FShadowParams& ShadowParams)
 {
 	SCOPED_DRAW_EVENT(RHICmdList, GaussianSplatDrawGlobalIndirect);
 
@@ -1672,6 +1678,10 @@ void FGaussianSplatRenderer::DrawSplatsGlobalIndirect(
 
 	FGaussianSplatPS::FParameters PSParameters;
 	SetVelocityPSParameters(PSParameters, View, GlobalAccumulator);
+	// Shadow Receiver (Tier 1.1): forward the batch-wide shadow state to the PS.
+	PSParameters.bReceiveShadows = ShadowParams.bReceiveShadows ? 1u : 0u;
+	PSParameters.ShadowStrength = ShadowParams.ShadowStrength;
+	PSParameters.DebugForceShadowFactor = ShadowParams.DebugForceShadowFactor;
 	SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PSParameters);
 
 	RHICmdList.SetStreamSource(0, nullptr, 0);

@@ -44,6 +44,25 @@ uint EnableNanite;  // 1=Nanite enabled, 0=disabled (non-Nanite assets hidden in
 float4x4 PrevTranslatedWorldToClip;  // Previous frame's un-jittered matrix for velocity
 float3 PreViewTranslation;           // Current frame's pre-view translation
 float3 PrevPreViewTranslation;       // Previous frame's pre-view translation
+
+// Shadow Receiver (Tier 1.1) — batch-wide shadow params from the CPU renderer.
+// See Public/GaussianSplatShaders.h FGaussianSplatPS::FParameters for wire-up.
+uint  bReceiveShadows;          // 1 = apply shadow modulation, 0 = leave color as-is
+float ShadowStrength;           // 0 = no darken, 1 = full black in shadow
+float DebugForceShadowFactor;   // >= 0: force this shadow factor, -1 = use real path
+
+// Apply a 0..1 shadow factor (1 = fully lit, 0 = fully shadowed) to an RGB color,
+// remapping through ShadowStrength so the component slider controls how dark the
+// darkest shadowed splat becomes.
+float3 ApplyShadowToColor(float3 InColor, float ShadowFactor)
+{
+    // Interpolate between "fully darkened" and "unshaded" based on ShadowFactor.
+    // At ShadowFactor=1, we multiply by 1.0 (no change).
+    // At ShadowFactor=0, we multiply by (1 - ShadowStrength) (user-controlled darkness).
+    float Lit = saturate(ShadowFactor);
+    float Modulation = lerp(1.0 - ShadowStrength, 1.0, Lit);
+    return InColor * Modulation;
+}
 #endif
 
 // Convert HSV to RGB (Nanite-style saturated colors)
@@ -246,6 +265,23 @@ FPixelOutput MainPS(FVertexOutput Input)
 
 	// Apply Gaussian to alpha
 	color.a = saturate(gaussianWeight * color.a);
+
+	// Shadow Receiver (Tier 1.1): modulate color BEFORE premultiplication so the
+	// darkening appears correctly in accumulated alpha-blended output.
+	// For this commit the only path available is DebugForceShadowFactor; real CSM
+	// sampling lands in a later commit. When the feature is off this entire block
+	// compiles to nothing thanks to the static 0 uniform (no perf impact).
+	if (bReceiveShadows != 0)
+	{
+		float ShadowFactor = 1.0; // default: fully lit
+		if (DebugForceShadowFactor >= 0.0)
+		{
+			ShadowFactor = DebugForceShadowFactor;
+		}
+		// TODO: replace the above branch with real directional-light CSM sampling
+		// using TranslatedWorldPos → shadow space → PCF. See impl doc §2.2.
+		color.rgb = ApplyShadowToColor(color.rgb, ShadowFactor);
+	}
 
 	// Premultiplied alpha
 	color.rgb *= color.a;

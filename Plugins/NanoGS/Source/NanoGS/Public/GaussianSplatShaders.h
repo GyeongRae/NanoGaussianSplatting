@@ -211,6 +211,15 @@ class FGaussianSplatPS : public FGlobalShader
 		SHADER_PARAMETER(FVector3f, PreViewTranslation)
 		// Previous frame's PreViewTranslation for correct velocity calculation
 		SHADER_PARAMETER(FVector3f, PrevPreViewTranslation)
+		// --- Shadow Receiver (Tier 1.1) ---------------------------------
+		// 1 = apply shadow factor to splat color, 0 = keep splat color unchanged.
+		SHADER_PARAMETER(uint32, bReceiveShadows)
+		// How strongly shadows darken the splats (0 = no darken, 1 = full black in shadow).
+		SHADER_PARAMETER(float, ShadowStrength)
+		// Debug override: >= 0 forces every splat to this shadow factor (1 = lit, 0 = shadow),
+		// bypassing the real shadow map sampling path. -1 means "use the real path".
+		// Used in step 2 to validate the color-modulation chain before CSM sampling lands.
+		SHADER_PARAMETER(float, DebugForceShadowFactor)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

@@ -187,6 +187,18 @@ public:
 	);
 
 	/**
+	 * Aggregated shadow-receiver parameters passed through to the splat pixel shader.
+	 * Tier 1.1: because a single draw call covers many batched proxies, we collapse
+	 * the per-proxy shadow settings into one struct chosen by the caller.
+	 */
+	struct FShadowParams
+	{
+		bool bReceiveShadows = false;
+		float ShadowStrength = 0.0f;
+		float DebugForceShadowFactor = -1.0f; // -1 = disabled, use real shadow path
+	};
+
+	/**
 	 * Draw all splats using global sorted keys and ViewData.
 	 * Borrows the IndexBuffer from the first valid proxy.
 	 */
@@ -196,7 +208,8 @@ public:
 		FGaussianGlobalAccumulator* GlobalAccumulator,
 		FBufferRHIRef IndexBuffer,
 		int32 TotalSplatCount,
-		int32 DebugMode
+		int32 DebugMode,
+		const FShadowParams& ShadowParams = FShadowParams()
 	);
 
 	//----------------------------------------------------------------------
@@ -277,7 +290,8 @@ public:
 		const FSceneView& View,
 		FGaussianGlobalAccumulator* GlobalAccumulator,
 		FBufferRHIRef IndexBuffer,
-		int32 DebugMode
+		int32 DebugMode,
+		const FShadowParams& ShadowParams = FShadowParams()
 	);
 
 	/**

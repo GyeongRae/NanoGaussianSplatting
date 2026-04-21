@@ -524,9 +524,23 @@ void FNanoGSModule::OnPostOpaqueRender_RenderThread(FPostOpaqueRenderParameters&
 						}
 					}
 
+					// Shadow Receiver (Tier 1.1): gather batch-wide shadow params from first
+					// opted-in proxy (see note above the other DrawSplatsGlobal call site).
+					FGaussianSplatRenderer::FShadowParams ShadowParams;
+					for (const auto& Info : ValidProxies)
+					{
+						if (Info.Proxy && Info.Proxy->GetReceiveShadows())
+						{
+							ShadowParams.bReceiveShadows = true;
+							ShadowParams.ShadowStrength = Info.Proxy->GetShadowStrength();
+							ShadowParams.DebugForceShadowFactor = Info.Proxy->GetDebugForceShadowFactor();
+							break;
+						}
+					}
+
 					// Single draw call — instance count from GlobalDrawIndirectArgsBuffer
 					FGaussianSplatRenderer::DrawSplatsGlobalIndirect(
-						RHICmdList, *SceneView, RawAccumulator, SharedIndexBuffer, DebugMode);
+						RHICmdList, *SceneView, RawAccumulator, SharedIndexBuffer, DebugMode, ShadowParams);
 				}
 				else
 				{
@@ -608,10 +622,27 @@ void FNanoGSModule::OnPostOpaqueRender_RenderThread(FPostOpaqueRenderParameters&
 						}
 					}
 
+					// Shadow Receiver (Tier 1.1): the global path batches many proxies into one
+					// draw, so we pick the first proxy that has opted in and use its shadow
+					// settings for the whole batch. This is a known limitation documented in
+					// 03_Impl_ShadowReceiver.md; per-proxy shadow parameters would require
+					// either splitting the draw or encoding shadow params per-splat.
+					FGaussianSplatRenderer::FShadowParams ShadowParams;
+					for (const auto& Info : ValidProxies)
+					{
+						if (Info.Proxy && Info.Proxy->GetReceiveShadows())
+						{
+							ShadowParams.bReceiveShadows = true;
+							ShadowParams.ShadowStrength = Info.Proxy->GetShadowStrength();
+							ShadowParams.DebugForceShadowFactor = Info.Proxy->GetDebugForceShadowFactor();
+							break;
+						}
+					}
+
 					// Single draw call for ALL proxies (capped to render budget)
 					FGaussianSplatRenderer::DrawSplatsGlobal(
 						RHICmdList, *SceneView, RawAccumulator,
-						SharedIndexBuffer, (int32)CappedTotalSplatCount, DebugMode);
+						SharedIndexBuffer, (int32)CappedTotalSplatCount, DebugMode, ShadowParams);
 				}
 			}
 		);
