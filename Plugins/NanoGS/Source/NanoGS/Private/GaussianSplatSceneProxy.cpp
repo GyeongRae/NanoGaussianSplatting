@@ -687,8 +687,14 @@ FGaussianSplatSceneProxy::FGaussianSplatSceneProxy(const UGaussianSplatComponent
 	, SplatScale(InComponent->SplatScale)
 	, LODErrorThreshold(InComponent->LODErrorThreshold)
 	, bEnableFrustumCulling(InComponent->bEnableFrustumCulling)
+	, bReceiveShadows(InComponent->bReceiveShadows)
+	, ShadowStrength(InComponent->ShadowStrength)
+	, DebugForceShadowFactor(InComponent->DebugForceShadowFactor)
 {
-	bWillEverBeLit = false;
+	// Shadow Receiver (Tier 1.1): even though GS is self-illuminated, when the user
+	// opts in to receiving shadows we must let UE treat this primitive as lit so the
+	// renderer gathers the relevant lights/CSM cascades into the view.
+	bWillEverBeLit = bReceiveShadows;
 }
 
 FGaussianSplatSceneProxy::~FGaussianSplatSceneProxy()
@@ -710,11 +716,14 @@ FPrimitiveViewRelevance FGaussianSplatSceneProxy::GetViewRelevance(const FSceneV
 {
 	FPrimitiveViewRelevance Result;
 	Result.bDrawRelevance = IsShown(View);
-	Result.bShadowRelevance = false; // Gaussian splats don't cast shadows (yet)
+	// Shadow Receiver (Tier 1.1): opt-in via Component.bReceiveShadows.
+	// GS still never casts shadows itself; this flag asks the renderer to include this
+	// primitive in the lighting gather pass so we can sample its shadow maps in the splat PS.
+	Result.bShadowRelevance = bReceiveShadows;
 	Result.bDynamicRelevance = true;
 	Result.bStaticRelevance = false;
 	Result.bRenderInMainPass = true;
-	Result.bUsesLightingChannels = false;
+	Result.bUsesLightingChannels = bReceiveShadows;
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
 
 	return Result;

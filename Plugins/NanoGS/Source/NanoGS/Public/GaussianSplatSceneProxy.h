@@ -376,6 +376,11 @@ public:
 	float GetSplatScale() const { return SplatScale; }
 	float GetLODErrorThreshold() const { return LODErrorThreshold; }
 
+	/** Shadow receiver parameters (Tier 1.1) */
+	bool GetReceiveShadows() const { return bReceiveShadows; }
+	float GetShadowStrength() const { return ShadowStrength; }
+	float GetDebugForceShadowFactor() const { return DebugForceShadowFactor; }
+
 	/** Check if this proxy is safe to use for rendering.
 	 *  Returns false if proxy is being destroyed or has invalid resources.
 	 *  Thread-safe - can be called from render thread.
@@ -418,6 +423,11 @@ private:
 	float SplatScale = 1.0f;
 	float LODErrorThreshold = 0.03f;
 	bool bEnableFrustumCulling = true;
+
+	/** Shadow receiver (Tier 1.1) — mirrored from UGaussianSplatComponent */
+	bool bReceiveShadows = false;
+	float ShadowStrength = 0.7f;
+	float DebugForceShadowFactor = -1.0f;
 
 #if WITH_EDITOR
 	/** Cached hit proxy created in CreateHitProxies, used for editor viewport click selection. */

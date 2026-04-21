@@ -84,6 +84,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gaussian Splatting|Performance", meta = (ClampMin = "0.001", ClampMax = "1.0"))
 	float LODErrorThreshold = 0.03f;
 
+	/** Receive dynamic shadows cast by scene meshes onto this splat cloud.
+	 *  When enabled, the GS sampling path will multiply its color by the scene's CSM shadow factor,
+	 *  so objects in the level (characters, props) leave shadows on the photoreal GS backdrop. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gaussian Splatting|Lighting")
+	bool bReceiveShadows = false;
+
+	/** How strongly shadows darken the splats. 0 = no shadow, 1 = fully black in shadow. Typical 0.5-0.8 for photoreal blends. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gaussian Splatting|Lighting",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bReceiveShadows"))
+	float ShadowStrength = 0.7f;
+
+	/** Debug: force a uniform shadow factor on every splat (bypasses shadow map sampling).
+	 *  Used to validate the color-modulation path before wiring real CSM sampling.
+	 *  1 = lit (no change), 0 = fully shadowed. -1 = disabled (use real shadow map). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gaussian Splatting|Lighting|Debug",
+		meta = (ClampMin = "-1.0", ClampMax = "1.0", EditCondition = "bReceiveShadows"))
+	float DebugForceShadowFactor = -1.0f;
+
 protected:
 	/** Called when the asset changes */
 	void OnAssetChanged();
